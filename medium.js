@@ -43,7 +43,7 @@
             },
             tags: {
                 paragraph: 'p',
-                outerLevel: ['pre','blockquote', 'figure', 'hr'],
+                outerLevel: ['pre','blockquote', 'figure', 'hr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol'],
                 innerLevel: ['a', 'b', 'u', 'i', 'img', 'strong'] // Todo: Convert strong to b (IE)
             },
             cssClasses: {
@@ -269,16 +269,16 @@
                         }
                     }
                 },
-                clean: function () {
+                clean: function (node) {
 
                     /*
                      * Deletes invalid nodes
                      * Removes Attributes
                      */
                     var attsToRemove = ['style','class'],
-                        only = (settings.tags.outerLevel).concat([settings.tags.paragraph]),
-                        children = settings.element.children,
+                        children = (node === undefined ? settings.element.children : node.children),
                         i, j, k;
+                        replace = [];
                     
                     // Go through top level children
                     for(i=0; i<children.length; i++){
@@ -295,9 +295,26 @@
                             }
                         }
 
-                        // Determine if we should modify node
-                        for(j=0; j<only.length;j++){
-                            if( only[j] === nodeName.toLowerCase() ){
+                        shouldDelete = this.checkNode(child);
+
+                        //
+                        if(shouldDelete && child.childNodes.length > 0)
+                        {
+                            var txt = child.innerText;
+                            if(txt)
+                            {
+                                var clone = child.cloneNode();
+                                clone.innerHTML = child.innerText;
+                                if(clone.childNodes.length > 0 && !this.checkNode(clone.childNodes[0]))
+                                {
+                                    replace[i] = clone.childNodes[0];
+                                    // child.parentNode.replaceChild(child);
+                                }
+                                else
+                                {
+                                    replace[i] = document.createTextNode(txt);
+                                    // child.parentNode.replaceChild(newNode,child);
+                                }
                                 shouldDelete = false;
                             }
                         }
@@ -314,6 +331,35 @@
                             }
                         }
                     }
+                    if (replace.length > 0)
+                    {
+                        for (var i = 0; i < replace.length; i++) {
+                            if(replace[i])
+                            {
+                                children.replaceChild(replace[i],children[i]);
+                            }
+                        };
+                    }
+                },
+                checkNode : function (node) {
+                    // Determine if we should modify node
+                    var whiteList = (settings.tags.outerLevel).concat([settings.tags.paragraph]);
+                    var returnValue = true;
+                    // use Array.indexOf if available
+                    if(whiteList.indexOf)
+                    {
+                        if(whiteList.indexOf(node.nodeName.toLowerCase()) >= 0)
+                            returnValue = false;
+                    }
+                    else
+                    {
+                        for(j=0; j<whiteList.length;j++){
+                            if( whiteList[j] === node.nodeName.toLowerCase() ){
+                                returnValue = false;
+                            }
+                        }
+                    }
+                    return returnValue;
                 },
                 lastChild: function () {
                     return settings.element.lastChild;
@@ -349,16 +395,19 @@
              * plain text nefore inserting the data.
              */
             pasteHook: function(fn){
-                var input = d.createElement('textarea');
+                var input = d.createElement('div');
+                input.setAttribute('contenteditable',"true");
                 input.className = settings.cssClasses.pasteHook;
                 settings.element.appendChild(input);
                 var pasteHookNode = utils.getElementsByClassName( settings.cssClasses.pasteHook, settings.element )[0];
+                settings.element.setAttribute('contenteditable','false');
                 pasteHookNode.focus();
                 setTimeout(function(){
-                    var v = pasteHookNode.value;
+                    settings.element.setAttribute('contenteditable','true');
+                    var v = pasteHookNode;
                     fn.call(null, v);
                     utils.html.deleteNode( pasteHookNode );
-                }, 1);
+                }, 10);
             }
         },
         intercept = {
@@ -441,9 +490,18 @@
                 quote: function(e){},
                 paste: function(e){
                     var sel = utils.selection.saveSelection();
-                    utils.pasteHook(function(text){
+                    utils.pasteHook(function(node){
                         utils.selection.restoreSelection( sel );
-                        d.execCommand('insertHTML', false, text.replace(/\n/g, '<br>') );
+                        utils.html.clean(node);
+                        // var frag = document.createDocumentFragment();
+                        var tmp = document.createElement('div');
+                        // frag.appendChild(tmp);
+                        for (var i = 0; i < node.childNodes.length; i++) {
+                            tmp.appendChild(node.childNodes[i]);
+                        }
+                        var html = tmp.innerHTML;
+                        d.execCommand('insertHTML', false, html );
+                        // d.execCommand('insertHTML', false, text.replace(/\n/g, '<br>') );
                     });
                 }
             },
