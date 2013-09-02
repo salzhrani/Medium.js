@@ -25,17 +25,16 @@
 
     var Medium = Medium || function (userOpts) {
 
-        var 
-        
-        settings = {
+        var settings = {
             debug: true,
             element: null,
             modifier: 'auto',
             placeholder: "",
             autofocus: false,
-            autoHR: true,
+            autoHR: false,
             mode: 'rich', // inline, partial, rich
             maxLength: -1,
+            enabled : true,
             modifiers: {
                 66: 'bold',
                 73: 'italicize',
@@ -64,13 +63,12 @@
             }
         },
         utils = {
-        
             /*
              * Keyboard Interface events
              */
             isCommand: function(e, fnTrue, fnFalse){
-                if((settings.modifier==='ctrl' && e.ctrlKey ) || 
-                   (settings.modifier==='cmd' && e.metaKey ) || 
+                if((settings.modifier==='ctrl' && e.ctrlKey ) ||
+                   (settings.modifier==='cmd' && e.metaKey ) ||
                    (settings.modifier==='auto' && (e.ctrlKey || e.metaKey) )
                 ){
                     return fnTrue.call();
@@ -103,7 +101,6 @@
                 if(cache.cmd){ return false; }
                 return !(e.which in special);
             },
-            
             /*
              * Handle Events
              */
@@ -128,7 +125,6 @@
                     e.returnValue = false;
                 }
             },
-            
             /*
              * Utilities
              */
@@ -144,7 +140,6 @@
                 }
                 return a;
             },
-            
             deepExtend: function (destination, source) {
                 for (var property in source) {
                     if (source[property] && source[property].constructor && source[property].constructor === Object) {
@@ -224,7 +219,7 @@
                             node.innerText = val;
                         }
                     }
-                    return (node.textContent || node.innerText).trim();
+                    return (node.textContent || node.innerText || "").trim();
                 },
                 changeTag: function(oldNode, newTag) {
                     var newNode = d.createElement(newTag),
@@ -369,6 +364,15 @@
         intercept = {
             focus: function(e){
                 //_log('FOCUSED');
+                console.log('focus');
+                var event = new Event('editableFocus');
+                settings.element.dispatchEvent(event);
+            },
+            blur: function(e){
+                //_log('FOCUSED');
+                console.log('blur');
+                 var event = new Event('editableBlur');
+                settings.element.dispatchEvent(event);
             },
             down: function(e){
                 
@@ -486,6 +490,7 @@
                 utils.addEvent(settings.element, 'keyup', intercept.up);
                 utils.addEvent(settings.element, 'keydown', intercept.down);
                 utils.addEvent(settings.element, 'focus', intercept.focus);
+                utils.addEvent(settings.element, 'blur', intercept.blur);
             },
             preserveElementFocus: function(){
                 
@@ -538,7 +543,8 @@
             utils.deepExtend(settings, opts);
     
             // Editable
-            settings.element.contentEditable = true;
+            if(settings.enabled)
+                settings.element.contentEditable = true;
             settings.element.className += (" ")+settings.cssClasses.editor;
             settings.element.className += (" ")+settings.cssClasses.editor+"-"+settings.mode;
             
@@ -558,7 +564,18 @@
             utils.removeEvent(settings.element, 'keyup', intercept.up);
             utils.removeEvent(settings.element, 'keydown', intercept.down);
             utils.removeEvent(settings.element, 'focus', intercept.focus);
+            utils.removeEvent(settings.element, 'blur', intercept.blur);
         };
+
+        this.disable = function (){
+            settings.element.contentEditable = false;
+            settings.enabled = false;
+        }
+
+        this.enable = function (){
+            settings.element.contentEditable = true;
+            settings.enabled = true;
+        }
         
         init(userOpts);
     
