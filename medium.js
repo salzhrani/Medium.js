@@ -237,7 +237,8 @@
                     oldNode.parentNode.removeChild(oldNode);
                 },
                 deleteNode: function(el){
-                    el.parentNode.removeChild(el);
+                    if(el.parentNode)
+                        el.parentNode.removeChild(el);
                 },
                 placeholders: function(){
                 
@@ -251,22 +252,25 @@
                         settings.element.innerHTML = '';
                         
                         // We need to add placeholders
-                        if(settings.placeholder.length > 0){ 
-                            utils.html.addTag(settings.tags.paragraph, false, false);
-                            var c = utils.html.lastChild();
-                            c.className = settings.cssClasses.placeholder;
-                            utils.html.text(c, settings.placeholder);
-                        }
+                        // if(settings.placeholder.length > 0){ 
+                        //     utils.html.addTag(settings.tags.paragraph, false, false);
+                        //     var c = utils.html.lastChild();
+                        //     c.className = settings.cssClasses.placeholder;
+                        //     utils.html.text(c, settings.placeholder);
+                        // }
                         
                         // Add base P tag and do autofocus
-                        utils.html.addTag(settings.tags.paragraph, cache.initialized ? true : settings.autofocus);
+                        var newNode = utils.html.addTag(settings.tags.paragraph, cache.initialized ? true : settings.autofocus);
+                        if(settings.element.getAttribute('data-placeholder'))
+                            newNode.setAttribute('data-placeholder',settings.element.getAttribute('data-placeholder'));
+
                     } else {
-                        if(innerText !== settings.placeholder){
-                            var i;
-                            for(i=0; i<placeholders.length; i++){
-                                utils.html.deleteNode(placeholders[i]);
-                            }
-                        }
+                        // if(innerText !== settings.placeholder){
+                        //     var i;
+                        //     for(i=0; i<placeholders.length; i++){
+                        //         utils.html.deleteNode(placeholders[i]);
+                        //     }
+                        // }
                     }
                 },
                 clean: function (node) {
@@ -277,7 +281,7 @@
                      */
                     var attsToRemove = ['style','class'],
                         children = (node === undefined ? settings.element.children : node.children),
-                        i, j, k;
+                        i, j, k,
                         replace = [];
                     
                     // Go through top level children
@@ -304,7 +308,7 @@
                             if(txt)
                             {
                                 var clone = child.cloneNode();
-                                clone.innerHTML = child.innerText;
+                                clone.innerHTML = child.innerText || child.textContent;
                                 if(clone.childNodes.length > 0 && !this.checkNode(clone.childNodes[0]))
                                 {
                                     replace[i] = clone.childNodes[0];
@@ -333,12 +337,18 @@
                     }
                     if (replace.length > 0)
                     {
+                        var childArr = Array.prototype.slice.call( children );
                         for (var i = 0; i < replace.length; i++) {
                             if(replace[i])
                             {
-                                children.replaceChild(replace[i],children[i]);
+                                if(replace[i].textContent)
+                                    replace[i].textContent.trim();
+                                else if(replace[i].innerText)
+                                    replace[i].innerText.trim();
+                               childArr[i].parentNode.replaceChild(replace[i],childArr[i]);
                             }
                         };
+                        replace[0].parentNode.normalize();
                     }
                 },
                 checkNode : function (node) {
@@ -371,7 +381,7 @@
                     if( typeof isEditable !== "undefined" && isEditable === false ){
                         newEl.contentEditable = false;
                     }
-                    newEl.innerHTML = ' ';
+                    newEl.innerHTML = '';
                     if( afterElement && afterElement.nextSibling ){
                         afterElement.parentNode.insertBefore( newEl, afterElement.nextSibling );
                         toFocus = afterElement.nextSibling;
@@ -385,6 +395,7 @@
                         cache.focusedElement = toFocus;
                         utils.cursor.set( 0, toFocus );
                     }
+                    return newEl
                     
                 }
             },
@@ -489,21 +500,24 @@
                 },
                 quote: function(e){},
                 paste: function(e){
-                    var sel = utils.selection.saveSelection();
-                    utils.pasteHook(function(node){
-                        utils.selection.restoreSelection( sel );
-                        utils.html.clean(node);
-                        // var frag = document.createDocumentFragment();
-                        var tmp = document.createElement('div');
-                        // frag.appendChild(tmp);
-                        for (var i = 0; i < node.childNodes.length; i++) {
-                            tmp.appendChild(node.childNodes[i]);
-                        }
-                        var html = tmp.innerHTML;
-                        d.execCommand('insertHTML', false, html );
-                        // d.execCommand('insertHTML', false, text.replace(/\n/g, '<br>') );
-                    });
+                   intercept.paste(e);
                 }
+            },
+            paste : function (e) {
+            var sel = utils.selection.saveSelection();
+            utils.pasteHook(function(node){
+                utils.selection.restoreSelection( sel );
+                utils.html.clean(node);
+                // var frag = document.createDocumentFragment();
+                var tmp = document.createElement('div');
+                // frag.appendChild(tmp);
+                for (var i = 0; i < node.childNodes.length; i++) {
+                    tmp.appendChild(node.childNodes[i]);
+                }
+                var html = tmp.innerHTML;
+                d.execCommand('insertHTML', false, html );
+                // d.execCommand('insertHTML', false, text.replace(/\n/g, '<br>') );
+                });
             },
             enterKey: function (e) {
             
@@ -549,6 +563,7 @@
                 utils.addEvent(settings.element, 'keydown', intercept.down);
                 utils.addEvent(settings.element, 'focus', intercept.focus);
                 utils.addEvent(settings.element, 'blur', intercept.blur);
+                utils.addEvent(settings.element, 'paste', intercept.paste);
             },
             preserveElementFocus: function(){
                 
@@ -623,6 +638,7 @@
             utils.removeEvent(settings.element, 'keydown', intercept.down);
             utils.removeEvent(settings.element, 'focus', intercept.focus);
             utils.removeEvent(settings.element, 'blur', intercept.blur);
+            utils.removeEvent(settings.element, 'paste', intercept.paste);
         };
 
         this.disable = function (){
