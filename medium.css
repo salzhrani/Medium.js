@@ -28,10 +28,11 @@
     }
 .Medium > *:first-child:empty:before {
     content:attr(data-placeholder);
-     position: absolute;
+     /*position: absolute;*/
     z-index: 1;
     pointer-events: none;
     color:gray;
+    min-height: 1em;
 }
 .Medium .Medium-placeholder{
 	-ms-filter:"progid:DXImageTransform.Microsoft.Alpha(Opacity=50)";

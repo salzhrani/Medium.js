@@ -203,6 +203,25 @@
                         range.collapse(false);
                         range.select();
                     }
+                },
+                setCaretIn : function (node) {
+                    var range,sel;
+                    if (window.getSelection && document.createRange) {
+                        node.focus();
+                        range = document.createRange();
+                        range.selectNodeContents(node);
+                        range.collapse(true);
+                        sel = window.getSelection();
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                    }
+                    else if (document.body.createTextRange) 
+                    {
+                        range = document.body.createTextRange();
+                        range.moveToElementText(node);
+                        range.collapse(true);
+                        range.select();
+                    }
                 }
             },
             
@@ -283,7 +302,9 @@
                         children = (node === undefined ? settings.element.children : node.children),
                         i, j, k,
                         replace = [];
-                    
+                    for (var i = 0; i < children.length; i++) {
+                        console.log(children[i]);
+                    };
                     // Go through top level children
                     for(i=0; i<children.length; i++){
                         var child = children[i],
@@ -347,8 +368,8 @@
                                     replace[i].innerText.trim();
                                childArr[i].parentNode.replaceChild(replace[i],childArr[i]);
                             }
-                        };
-                        replace[0].parentNode.normalize();
+                        }
+                        replace.pop().parentNode.normalize();
                     }
                 },
                 checkNode : function (node) {
@@ -393,7 +414,8 @@
                     
                     if( shouldFocus ){
                         cache.focusedElement = toFocus;
-                        utils.cursor.set( 0, toFocus );
+                        // utils.cursor.set( 0, toFocus );
+                        utils.cursor.setCaretIn(toFocus );
                     }
                     return newEl
                     
@@ -404,8 +426,8 @@
              * This is a Paste Hook. When the user pastes
              * content, this ultimately converts it into
              * plain text nefore inserting the data.
-             */
-            pasteHook: function(fn){
+            
+            pasteHook: function(fn,e){
                 var input = d.createElement('div');
                 input.setAttribute('contenteditable',"true");
                 input.className = settings.cssClasses.pasteHook;
@@ -413,26 +435,47 @@
                 var pasteHookNode = utils.getElementsByClassName( settings.cssClasses.pasteHook, settings.element )[0];
                 settings.element.setAttribute('contenteditable','false');
                 pasteHookNode.focus();
+                if(e && e.clipboardData && e.clipboardData.getData)
+                {
+                    if (/text\/html/.test(e.clipboardData.types)) 
+                    {
+                        pasteHookNode.innerHTML = e.clipboardData.getData('text/html');
+                    }
+                    else if(/text\/plain/.test(e.clipboardData.types))
+                    {
+                        pasteHookNode.innerHTML = e.clipboardData.getData('text/plain');
+                    }
+                    if (e.preventDefault) 
+                    {
+                        e.stopPropagation();
+                        e.preventDefault();
+                    }
+                }
                 setTimeout(function(){
                     settings.element.setAttribute('contenteditable','true');
                     var v = pasteHookNode;
                     fn.call(null, v);
                     utils.html.deleteNode( pasteHookNode );
                 }, 10);
-            }
+            } */
         },
         intercept = {
+            skip : {},
             focus: function(e){
                 //_log('FOCUSED');
                 console.log('focus');
-                var event = new Event('editableFocus');
-                settings.element.dispatchEvent(event);
+                // var event = new Event('editableFocus');
+                // settings.element.dispatchEvent(event);
+                if(settings.element.innerHTML == '<p data-placeholder="Placeholder"></p>')
+                {
+                    utils.cursor.setCaretIn(settings.element.childNodes[0]);
+                }
             },
             blur: function(e){
                 //_log('FOCUSED');
                 console.log('blur');
-                 var event = new Event('editableBlur');
-                settings.element.dispatchEvent(event);
+                //  var event = new Event('editableBlur');
+                // settings.element.dispatchEvent(event);
             },
             down: function(e){
                 
@@ -453,7 +496,7 @@
                             return;
                         }
                         
-                        intercept.command[cmd].call(null, e);
+                        // intercept.command[cmd].call(null, e);
                     }
                 });
                 
@@ -475,6 +518,11 @@
                 }
             },
             up: function(e){
+                if(intercept.skip.up)
+                {
+                    intercept.skip.up = false;
+                    return true;
+                }
                 utils.isCommand(e, function(){
                     cache.cmd = false;
                 }, function(){
@@ -500,24 +548,43 @@
                 },
                 quote: function(e){},
                 paste: function(e){
-                   intercept.paste(e);
+                   return intercept.paste(e);
                 }
             },
             paste : function (e) {
-            var sel = utils.selection.saveSelection();
-            utils.pasteHook(function(node){
-                utils.selection.restoreSelection( sel );
-                utils.html.clean(node);
-                // var frag = document.createDocumentFragment();
-                var tmp = document.createElement('div');
-                // frag.appendChild(tmp);
-                for (var i = 0; i < node.childNodes.length; i++) {
-                    tmp.appendChild(node.childNodes[i]);
-                }
-                var html = tmp.innerHTML;
-                d.execCommand('insertHTML', false, html );
-                // d.execCommand('insertHTML', false, text.replace(/\n/g, '<br>') );
-                });
+                // var sel = utils.selection.saveSelection();
+                // utils.pasteHook(function(node){
+                //     utils.selection.restoreSelection( sel );
+                //     utils.html.clean(node);
+                //     // var frag = document.createDocumentFragment();
+                //     var tmp = document.createElement('div');
+                //     // frag.appendChild(tmp);
+                //     for (var i = 0; i < node.childNodes.length; i++) {
+                //         tmp.appendChild(node.childNodes[i]);
+                //     }
+                //     var html = tmp.innerHTML;
+                //     d.execCommand('insertHTML', false, html );
+                //     // d.execCommand('insertHTML', false, text.replace(/\n/g, '<br>') );
+                // },e);
+                var sel = utils.selection.saveSelection();
+                var input = d.createElement('div');
+                input.setAttribute('contenteditable',"true");
+                input.className = settings.cssClasses.pasteHook;
+                settings.element.appendChild(input);
+                var pasteHookNode = utils.getElementsByClassName( settings.cssClasses.pasteHook, settings.element )[0];
+                settings.element.setAttribute('contenteditable','false');
+                pasteHookNode.focus();
+                intercept.skip.up = true;
+                utils.cursor.setCaretIn(pasteHookNode);
+                window.setTimeout(function() {
+                    settings.element.setAttribute('contenteditable','true');
+                    utils.selection.restoreSelection( sel );
+                    utils.html.clean(pasteHookNode);
+                    console.log(pasteHookNode.innerHTML);
+                    d.execCommand('insertHTML', false, pasteHookNode.innerHTML );
+                    utils.html.deleteNode( pasteHookNode );
+                }, 10);
+                return true;
             },
             enterKey: function (e) {
             
