@@ -47,9 +47,9 @@
                 innerLevel: ['a', 'b', 'u', 'i', 'img', 'strong'] // Todo: Convert strong to b (IE)
             },
             cssClasses: {
-                editor: 'Medium',
-                pasteHook: 'Medium-paste-hook',
-                placeholder: 'Medium-placeholder'
+                editor: 'medium',
+                pasteHook: 'medium-paste-hook',
+                placeholder: 'medium-placeholder'
             }
         },
         cache = {
@@ -260,36 +260,25 @@
                         el.parentNode.removeChild(el);
                 },
                 placeholders: function(){
-                
                     
-                    
-                    var placeholders = utils.getElementsByClassName(settings.cssClasses.placeholder, settings.element),
-                        innerText = utils.html.text(settings.element);
+                    var innerText = utils.html.text(settings.element);
                     
                     // Empty Editer
                     if( innerText === ""  ){
                         settings.element.innerHTML = '';
-                        
-                        // We need to add placeholders
-                        // if(settings.placeholder.length > 0){ 
-                        //     utils.html.addTag(settings.tags.paragraph, false, false);
-                        //     var c = utils.html.lastChild();
-                        //     c.className = settings.cssClasses.placeholder;
-                        //     utils.html.text(c, settings.placeholder);
-                        // }
-                        
+
                         // Add base P tag and do autofocus
                         var newNode = utils.html.addTag(settings.tags.paragraph, cache.initialized ? true : settings.autofocus);
                         if(settings.element.getAttribute('data-placeholder'))
-                            newNode.setAttribute('data-placeholder',settings.element.getAttribute('data-placeholder'));
+                            newNode.setAttribute('data-placeholder',settings.placeholder || settings.element.getAttribute('data-placeholder'));
 
                     } else {
-                        // if(innerText !== settings.placeholder){
-                        //     var i;
-                        //     for(i=0; i<placeholders.length; i++){
-                        //         utils.html.deleteNode(placeholders[i]);
-                        //     }
-                        // }
+                        for (var i = settings.element.childNodes.length - 1; i >= 0; i--) {
+                            if( settings.element.childNodes[i].getAttribute && settings.element.childNodes[i].getAttribute('data-placeholder') )
+                            {
+                                settings.element.childNodes[i].removeAttribute('data-placeholder')
+                            }
+                        }
                     }
                 },
                 clean: function (node) {
@@ -299,12 +288,15 @@
                      * Removes Attributes
                      */
                     var attsToRemove = ['style','class'],
-                        children = (node === undefined ? settings.element.children : node.children),
+                        parent = (node === undefined ? settings.element : node),
+                        children = parent.children,
                         i, j, k,
                         replace = [];
-                    for (var i = 0; i < children.length; i++) {
-                        console.log(children[i]);
-                    };
+
+
+                    // if the parent is baiscally empty, non of the logic should execute
+                    if(parent.children.length == 1 && utils.html.text(parent) == "")
+                        return;
                     // Go through top level children
                     for(i=0; i<children.length; i++){
                         var child = children[i],
@@ -333,12 +325,12 @@
                                 if(clone.childNodes.length > 0 && !this.checkNode(clone.childNodes[0]))
                                 {
                                     replace[i] = clone.childNodes[0];
-                                    // child.parentNode.replaceChild(child);
                                 }
                                 else
                                 {
-                                    replace[i] = document.createTextNode(txt);
-                                    // child.parentNode.replaceChild(newNode,child);
+                                    var p = document.createElement('p');
+                                    p.innerText = txt;
+                                    replace[i] = p;
                                 }
                                 shouldDelete = false;
                             }
@@ -374,7 +366,10 @@
                 },
                 checkNode : function (node) {
                     // Determine if we should modify node
-                    var whiteList = (settings.tags.outerLevel).concat([settings.tags.paragraph]);
+                    if(settings.mode == "inline")
+                        return true;
+                    else
+                        var whiteList = settings.mode == "partial" ? ['p'] : (settings.tags.outerLevel).concat([settings.tags.paragraph]);
                     var returnValue = true;
                     // use Array.indexOf if available
                     if(whiteList.indexOf)
@@ -463,19 +458,16 @@
             skip : {},
             focus: function(e){
                 //_log('FOCUSED');
-                console.log('focus');
-                // var event = new Event('editableFocus');
-                // settings.element.dispatchEvent(event);
-                if(settings.element.innerHTML == '<p data-placeholder="Placeholder"></p>')
+                var event = new CustomEvent('editableFocus');
+                settings.element.dispatchEvent(event);
+                if(settings.element.innerHTML == '<p data-placeholder="'+settings.placeholder+'"></p>')
                 {
                     utils.cursor.setCaretIn(settings.element.childNodes[0]);
                 }
             },
             blur: function(e){
-                //_log('FOCUSED');
-                console.log('blur');
-                //  var event = new Event('editableBlur');
-                // settings.element.dispatchEvent(event);
+                var event = new CustomEvent('editableBlur');
+                settings.element.dispatchEvent(event);
             },
             down: function(e){
                 
@@ -501,16 +493,16 @@
                 });
                 
                 if( settings.maxLength !== -1 ){
-                    var ph = settings.element.getElementsByClassName(settings.cssClasses.placeholder)[0],
-                        len = utils.html.text().length;
+                    // var ph = settings.element.getElementsByClassName(settings.cssClasses.placeholder)[0],
+                    var len = utils.html.text().length;
                         
-                    if(settings.placeholder && ph){
-                        len -= settings.placeholder.length;
-                    }
+                    // if(settings.placeholder && ph){
+                    //     len -= settings.placeholder.length;
+                    // }
                     if( len >= settings.maxLength && utils.isNotSpecial(e) ){
                         return utils.preventDefaultEvent(e);
                     }
-                    _log(len+'/'+settings.maxLength);
+                    // _log(len+'/'+settings.maxLength);
                 }
                 
                 if( e.which === 13 ){
@@ -528,9 +520,14 @@
                 }, function(){
                     cache.cmd = true;
                 });
-                utils.html.clean();
+                var sel = utils.selection.saveSelection();
+                // utils.html.clean();
+                utils.selection.restoreSelection(sel);
                 utils.html.placeholders();
-                action.preserveElementFocus();
+                // action.preserveElementFocus();
+                var event = new CustomEvent('editableModified');
+                event.data = settings.element.innerHTML;
+                settings.element.dispatchEvent(event);
             },
             command: {
                 bold: function(e){
@@ -580,9 +577,23 @@
                     settings.element.setAttribute('contenteditable','true');
                     utils.selection.restoreSelection( sel );
                     utils.html.clean(pasteHookNode);
-                    console.log(pasteHookNode.innerHTML);
+                    if(settings.mode == 'inline')
+                    {
+                        var p = document.createElement('p');
+                        var newStr = pasteHookNode.innerText.replace(/(\r\n|\n|\r)/gm," ");
+                        if(settings.maxLength >= 0)
+                            newStr = newStr.substring(0,settings.maxLength + 1);
+                        p.innerText = newStr;
+                        for (var i = pasteHookNode.childNodes.length - 1; i >= 0; i--) {
+                            utils.html.deleteNode(pasteHookNode.childNodes[i]);
+                        }
+                        pasteHookNode.appendChild(p);
+                    }
                     d.execCommand('insertHTML', false, pasteHookNode.innerHTML );
                     utils.html.deleteNode( pasteHookNode );
+                    var event = new Event('editableModified');
+                    event.data = settings.element.innerHTML;
+                    settings.element.dispatchEvent(event);
                 }, 10);
                 return true;
             },
@@ -592,7 +603,7 @@
                     return utils.preventDefaultEvent(e);
                 }
 
-                if( !cache.shift ){
+                if( e.altKey ){
                     
                     utils.preventDefaultEvent(e);
                     
