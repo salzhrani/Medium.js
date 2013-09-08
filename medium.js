@@ -52,6 +52,7 @@
                 placeholder: 'medium-placeholder'
             }
         },
+        editor = null,
         cache = {
             initialized: false,
             cmd: false,
@@ -709,6 +710,8 @@
             
             // Set as initialized
             cache.initialized = true;
+            if(ZenEditor && settings.mode == "rich")
+                new ZenEditor(settings.element);
         };
         
         this.destroy = function(){
@@ -722,12 +725,12 @@
         this.disable = function (){
             settings.element.contentEditable = false;
             settings.enabled = false;
-        }
+        };
 
         this.enable = function (){
             settings.element.contentEditable = true;
             settings.enabled = true;
-        }
+        };
         
         init(userOpts);
     
@@ -743,9 +746,436 @@
     }
 
     if (typeof define === "function" && define.amd) {
-        define('Medium', [], function () { 
-            return Medium; 
+        define('Medium', [], function () {
+            return Medium;
         });
     }
 
+}).call(this, window, document);
+
+
+// From zenpen.io A minimal web based text editor for the modern man.
+// for license please refer to https://github.com/tholman/zenpen/blob/master/licence.md
+
+(function(w, d){
+
+    'use strict';
+    
+    /*
+     * Fix IE shit
+     */
+var ZenEditor = function(element) {
+
+    // Editor elements
+    var headerField, contentField, cleanSlate, lastType, currentNodeList, savedSelection, lastSelection;
+
+    // Editor Bubble elements
+    var textOptions, optionsBox, boldButton, italicButton, quoteButton, urlButton, urlInput;
+
+
+
+
+    function init(elementNode) {
+
+
+        contentField = elementNode;
+        // lastRange = 0;
+        bindElements();
+
+        // Set cursor position
+        // var range = document.createRange();
+        // var selection = window.getSelection();
+        // range.setStart(headerField, 1);
+        // selection.removeAllRanges();
+        // selection.addRange(range);
+
+        createEventBindings();
+
+
+        // Load state if storage is supported
+        // if ( supportsHtmlStorage() ) {
+        //     loadState();
+        // }
+    }
+
+    function createEventBindings( on ) {
+
+        // Key up bindings
+        // if ( supportsHtmlStorage() ) {
+
+        //     document.onkeyup = function( event ) {
+        //         checkTextHighlighting( event );
+        //         saveState();
+        //     }
+
+        // } else {
+        addEvent(document,'keyup',checkTextHighlighting);
+            // document.onkeyup = checkTextHighlighting;
+        // }
+
+        // Mouse bindings
+        addEvent(document,'mousedown',checkTextHighlighting);
+        addEvent(document,'mouseup',checkTextHighlightingNext);
+        // document.onmousedown = checkTextHighlighting;
+        // document.onmouseup = function( event ) {
+
+        //     setTimeout( function() {
+        //         checkTextHighlighting( event );
+        //     }, 1);
+        // };
+        
+        // Window bindings
+        addEvent(window,'resize',updateBubblePosition);
+        // window.addEventListener( 'resize', function( event ) {
+        //     updateBubblePosition();
+        // });
+
+        // Scroll bindings. We limit the events, to free the ui
+        // thread and prevent stuttering. See:
+        // http://ejohn.org/blog/learning-from-twitter
+        var scrollEnabled = true;
+        document.body.addEventListener( 'scroll', function() {
+            
+            if ( !scrollEnabled ) {
+                return;
+            }
+            
+            scrollEnabled = true;
+            
+            updateBubblePosition();
+            
+            return setTimeout((function() {
+                scrollEnabled = true;
+            }), 250);
+        });
+    }
+
+    function bindElements() {
+
+        // headerField = document.querySelector( '.header' );
+        // contentField = document.querySelector( '.content' );
+        textOptions = document.querySelector( '.text-options' );
+
+        if(!textOptions)
+        {
+            textOptions = document.createElement('div');
+            textOptions.className = "text-options";
+            var optionsHtml = '<div class="options">'+
+                '<span class="no-overflow">'+
+                    '<span class="lengthen ui-inputs">'+
+                        '<button class="url useicons">&#xe005;</button>'+
+                        '<input class="url-input" type="text" placeholder="Type or Paste URL here"/>'+
+                        '<button class="bold">b</button>'+
+                        '<button class="italic">i</button>'+
+                        '<button class="quote">&rdquo;</button>'+
+                    '</span>'+
+                '</span>'+
+            '</div>';
+            textOptions.innerHTML = optionsHtml;
+            document.body.appendChild(textOptions);
+        }
+        optionsBox = textOptions.querySelector( '.options' );
+
+        boldButton = textOptions.querySelector( '.bold' );
+        boldButton.onclick = onBoldClick;
+
+        italicButton = textOptions.querySelector( '.italic' );
+        italicButton.onclick = onItalicClick;
+
+        quoteButton = textOptions.querySelector( '.quote' );
+        quoteButton.onclick = onQuoteClick;
+
+        urlButton = textOptions.querySelector( '.url' );
+        urlButton.onmousedown = onUrlClick;
+
+        urlInput = textOptions.querySelector( '.url-input' );
+        urlInput.onblur = onUrlInputBlur;
+        urlInput.onkeydown = onUrlInputKeyDown;
+    }
+
+    function checkTextHighlighting( event ) {
+
+        var selection = window.getSelection();
+
+        if ( (event.target.className === "url-input" ||
+             event.target.classList.contains( "url" ) ||
+             ( event.target.parentNode.classList && event.target.parentNode.classList.contains( "ui-inputs")) ) ) {
+
+            currentNodeList = findNodes( selection.focusNode );
+            updateBubbleStates();
+            return;
+        }
+
+        // Check selections exist
+        if ( selection.isCollapsed === true && lastType === false ) {
+
+            onSelectorBlur();
+        }
+
+        // Text is selected
+        if ( selection.isCollapsed === false ) {
+
+            currentNodeList = findNodes( selection.focusNode );
+
+            // Find if highlighting is in the editable area
+            // if ( hasNode( currentNodeList, "ARTICLE") ) {
+            if (isDescendant(contentField, selection.focusNode)) {
+                updateBubbleStates();
+                updateBubblePosition();
+
+                // Show the ui bubble
+                textOptions.className = "text-options active";
+            }
+        }
+
+        lastType = selection.isCollapsed;
+    }
+    function checkTextHighlightingNext( event ) {
+        setTimeout( function() {
+            checkTextHighlighting( event );
+        }, 1);
+    }
+    function updateBubblePosition() {
+        var selection = window.getSelection();
+        var range = selection.getRangeAt(0);
+        var boundary = range.getBoundingClientRect();
+        var optionsBoundry = textOptions.childNodes[0].getBoundingClientRect();
+        
+        textOptions.style.top = boundary.bottom + optionsBoundry.height + 15 + window.pageYOffset + "px";
+        textOptions.style.left = (boundary.left + boundary.right)/2 + "px";
+    }
+
+    function updateBubbleStates() {
+
+        // It would be possible to use classList here, but I feel that the
+        // browser support isn't quite there, and this functionality doesn't
+        // warrent a shim.
+
+        if ( hasNode( currentNodeList, 'B') ) {
+            boldButton.className = "bold active"
+        } else {
+            boldButton.className = "bold"
+        }
+
+        if ( hasNode( currentNodeList, 'I') ) {
+            italicButton.className = "italic active"
+        } else {
+            italicButton.className = "italic"
+        }
+
+        if ( hasNode( currentNodeList, 'BLOCKQUOTE') ) {
+            quoteButton.className = "quote active"
+        } else {
+            quoteButton.className = "quote"
+        }
+
+        if ( hasNode( currentNodeList, 'A') ) {
+            urlButton.className = "url useicons active"
+        } else {
+            urlButton.className = "url useicons"
+        }
+    }
+
+    function onSelectorBlur() {
+
+        textOptions.className = "text-options fade";
+        setTimeout( function() {
+
+            if (textOptions.className == "text-options fade") {
+
+                textOptions.className = "text-options";
+                textOptions.style.top = '-999px';
+                textOptions.style.left = '-999px';
+            }
+        }, 260 );
+    }
+
+    function findNodes( element ) {
+
+        var nodeNames = {};
+
+        while ( element.parentNode ) {
+
+            nodeNames[element.nodeName] = true;
+            element = element.parentNode;
+
+            if ( element.nodeName === 'A' ) {
+                nodeNames.url = element.href;
+            }
+        }
+
+        return nodeNames;
+    }
+
+    // http://stackoverflow.com/questions/2234979/how-to-check-in-javascript-if-one-element-is-a-child-of-another
+    function isDescendant(parent, child) {
+       var node = child.parentNode;
+       while (node !== null) {
+           if (node == parent) {
+               return true;
+           }
+           node = node.parentNode;
+       }
+       return false;
+   }
+
+   function hasNode( nodeList, name ) {
+
+        return !!nodeList[ name ];
+    }
+
+    // function saveState( event ) {
+        
+    //     localStorage[ 'header' ] = headerField.innerHTML;
+    //     localStorage[ 'content' ] = contentField.innerHTML;
+    // }
+
+    // function loadState() {
+
+    //     if ( localStorage[ 'header' ] ) {
+    //         headerField.innerHTML = localStorage[ 'header' ];
+    //     }
+
+    //     if ( localStorage[ 'content' ] ) {
+    //         contentField.innerHTML = localStorage[ 'content' ];
+    //     }
+    // }
+
+    function onBoldClick() {
+        document.execCommand( 'bold', false );
+    }
+
+    function onItalicClick() {
+        document.execCommand( 'italic', false );
+    }
+
+    function onQuoteClick() {
+
+        var nodeNames = findNodes( window.getSelection().focusNode );
+
+        if ( hasNode( nodeNames, 'BLOCKQUOTE' ) ) {
+            document.execCommand( 'formatBlock', false, 'p' );
+            document.execCommand( 'outdent' );
+        } else {
+            document.execCommand( 'formatBlock', false, 'blockquote' );
+        }
+    }
+
+    function onUrlClick() {
+
+        if ( optionsBox.className == 'options' ) {
+
+            optionsBox.className = 'options url-mode';
+
+            // Set timeout here to debounce the focus action
+            setTimeout( function() {
+
+                var nodeNames = findNodes( window.getSelection().focusNode );
+
+                if ( hasNode( nodeNames , "A" ) ) {
+                    urlInput.value = nodeNames.url;
+                } else {
+                    // Symbolize text turning into a link, which is temporary, and will never be seen.
+                    document.execCommand( 'createLink', false, '/' );
+                }
+
+                // Since typing in the input box kills the highlighted text we need
+                // to save this selection, to add the url link if it is provided.
+                lastSelection = window.getSelection().getRangeAt(0);
+                lastType = false;
+
+                urlInput.focus();
+
+            }, 100);
+
+        } else {
+
+            optionsBox.className = 'options';
+        }
+    }
+
+    function onUrlInputKeyDown( event ) {
+
+        if ( event.keyCode === 13 ) {
+            event.preventDefault();
+            applyURL( urlInput.value );
+            urlInput.blur();
+        }
+    }
+
+    function onUrlInputBlur( event ) {
+
+        optionsBox.className = 'options';
+        applyURL( urlInput.value );
+        urlInput.value = '';
+
+        currentNodeList = findNodes( window.getSelection().focusNode );
+        updateBubbleStates();
+    }
+
+    function applyURL( url ) {
+
+        rehighlightLastSelection();
+
+        // Unlink any current links
+        document.execCommand( 'unlink', false );
+
+        if (url !== "") {
+        
+            // Insert HTTP if it doesn't exist.
+            if ( !url.match("^(http|https)://") ) {
+
+                url = "http://" + url;  
+            } 
+
+            document.execCommand( 'createLink', false, url );
+        }
+    }
+
+    function rehighlightLastSelection() {
+
+        window.getSelection().addRange( lastSelection );
+    }
+
+    function getWordCount() {
+        
+        var text = get_text( contentField );
+
+        if ( text === "" ) {
+            return 0
+        } else {
+            return text.split(/\s+/).length;
+        }
+    }
+    function addEvent(element, eventName, func) {
+        if (element.addEventListener) {
+            element.addEventListener(eventName, func, false);
+        } else if (element.attachEvent) {
+            element.attachEvent("on" + eventName, func);
+        }
+    }
+    function removeEvent(element, eventName, func) {
+        if (element.addEventListener) {
+            element.removeEventListener(eventName, func, false);
+        } else if (element.attachEvent) {
+            element.detachEvent("on" + eventName, func);
+        }
+    }
+
+    init(element);
+};
+ // Exports and modularity
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = ZenEditor;
+    }
+
+    if (typeof ender === 'undefined') {
+        this.ZenEditor = ZenEditor;
+    }
+
+    if (typeof define === "function" && define.amd) {
+        define('ZenEditor', [], function () {
+            return ZenEditor;
+        });
+    }
 }).call(this, window, document);
