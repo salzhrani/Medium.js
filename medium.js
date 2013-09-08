@@ -711,7 +711,7 @@
             // Set as initialized
             cache.initialized = true;
             if(ZenEditor && settings.mode == "rich")
-                new ZenEditor(settings.element);
+                editor = new ZenEditor(settings.element);
         };
         
         this.destroy = function(){
@@ -801,53 +801,34 @@ var ZenEditor = function(element) {
     function createEventBindings( on ) {
 
         // Key up bindings
-        // if ( supportsHtmlStorage() ) {
-
-        //     document.onkeyup = function( event ) {
-        //         checkTextHighlighting( event );
-        //         saveState();
-        //     }
-
-        // } else {
         addEvent(document,'keyup',checkTextHighlighting);
-            // document.onkeyup = checkTextHighlighting;
-        // }
 
         // Mouse bindings
         addEvent(document,'mousedown',checkTextHighlighting);
         addEvent(document,'mouseup',checkTextHighlightingNext);
-        // document.onmousedown = checkTextHighlighting;
-        // document.onmouseup = function( event ) {
-
-        //     setTimeout( function() {
-        //         checkTextHighlighting( event );
-        //     }, 1);
-        // };
         
         // Window bindings
         addEvent(window,'resize',updateBubblePosition);
-        // window.addEventListener( 'resize', function( event ) {
-        //     updateBubblePosition();
-        // });
 
         // Scroll bindings. We limit the events, to free the ui
         // thread and prevent stuttering. See:
         // http://ejohn.org/blog/learning-from-twitter
         var scrollEnabled = true;
-        document.body.addEventListener( 'scroll', function() {
-            
-            if ( !scrollEnabled ) {
+        addEvent(document.body,'scroll', handleScroll);
+    }
+
+    function handleScroll () {
+        if ( !scrollEnabled ) {
                 return;
-            }
-            
+        }
+        
+        scrollEnabled = true;
+        
+        updateBubblePosition();
+        
+        return setTimeout((function() {
             scrollEnabled = true;
-            
-            updateBubblePosition();
-            
-            return setTimeout((function() {
-                scrollEnabled = true;
-            }), 250);
-        });
+        }), 250);
     }
 
     function bindElements() {
@@ -952,27 +933,27 @@ var ZenEditor = function(element) {
         // warrent a shim.
 
         if ( hasNode( currentNodeList, 'B') ) {
-            boldButton.className = "bold active"
+            boldButton.className = "bold active";
         } else {
-            boldButton.className = "bold"
+            boldButton.className = "bold";
         }
 
         if ( hasNode( currentNodeList, 'I') ) {
-            italicButton.className = "italic active"
+            italicButton.className = "italic active";
         } else {
-            italicButton.className = "italic"
+            italicButton.className = "italic";
         }
 
         if ( hasNode( currentNodeList, 'BLOCKQUOTE') ) {
-            quoteButton.className = "quote active"
+            quoteButton.className = "quote active";
         } else {
-            quoteButton.className = "quote"
+            quoteButton.className = "quote";
         }
 
         if ( hasNode( currentNodeList, 'A') ) {
-            urlButton.className = "url useicons active"
+            urlButton.className = "url useicons active";
         } else {
-            urlButton.className = "url useicons"
+            urlButton.className = "url useicons";
         }
     }
 
@@ -1023,23 +1004,6 @@ var ZenEditor = function(element) {
 
         return !!nodeList[ name ];
     }
-
-    // function saveState( event ) {
-        
-    //     localStorage[ 'header' ] = headerField.innerHTML;
-    //     localStorage[ 'content' ] = contentField.innerHTML;
-    // }
-
-    // function loadState() {
-
-    //     if ( localStorage[ 'header' ] ) {
-    //         headerField.innerHTML = localStorage[ 'header' ];
-    //     }
-
-    //     if ( localStorage[ 'content' ] ) {
-    //         contentField.innerHTML = localStorage[ 'content' ];
-    //     }
-    // }
 
     function onBoldClick() {
         document.execCommand( 'bold', false );
@@ -1125,8 +1089,8 @@ var ZenEditor = function(element) {
             // Insert HTTP if it doesn't exist.
             if ( !url.match("^(http|https)://") ) {
 
-                url = "http://" + url;  
-            } 
+                url = "http://" + url;
+            }
 
             document.execCommand( 'createLink', false, url );
         }
@@ -1142,7 +1106,7 @@ var ZenEditor = function(element) {
         var text = get_text( contentField );
 
         if ( text === "" ) {
-            return 0
+            return 0;
         } else {
             return text.split(/\s+/).length;
         }
@@ -1163,6 +1127,19 @@ var ZenEditor = function(element) {
     }
 
     init(element);
+
+    this.destroy = function () {
+        removeEvent(document,'keyup',checkTextHighlighting);
+
+        // Mouse bindings
+        removeEvent(document,'mousedown',checkTextHighlighting);
+        removeEvent(document,'mouseup',checkTextHighlightingNext);
+        
+        // Window bindings
+        removeEvent(window,'resize',updateBubblePosition);
+
+        removeEvent(document.body,'scroll', handleScroll);
+    };
 };
  // Exports and modularity
     if (typeof module !== 'undefined' && module.exports) {
